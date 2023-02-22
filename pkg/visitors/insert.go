@@ -174,7 +174,7 @@ type Insert struct {
 	InsertType
 
 	// Matched File
-	FileMatch uefi.Firmware
+	Matches []uefi.Firmware
 }
 
 // Run wraps Visit and performs some setup and teardown tasks.
@@ -187,14 +187,13 @@ func (v *Insert) Run(f uefi.Firmware) error {
 		return err
 	}
 
-	if numMatch := len(find.Matches); numMatch > 1 {
-		return fmt.Errorf("more than one match, only one match allowed! got %v", find.Matches)
-	} else if numMatch == 0 {
+	if numMatch := len(find.Matches); numMatch == 0 {
 		return errors.New("no matches found")
 	}
 
 	// Find should only match a file or a firmware volume. If it's an FV, we can
 	// edit the FV directly.
+	// TODO: Support multiple matches
 	if fvMatch, ok := find.Matches[0].(*uefi.FirmwareVolume); ok {
 		switch v.InsertType {
 		case InsertTypeFront:
@@ -208,10 +207,13 @@ func (v *Insert) Run(f uefi.Firmware) error {
 		return nil
 	}
 	var ok bool
-	if v.FileMatch, ok = find.Matches[0].(*uefi.File); !ok {
-		return fmt.Errorf("match was not a file or a firmware volume: got %T, unable to insert", find.Matches[0])
+	for _, m := range find.Matches {
+		if _, ok = m.(*uefi.File); !ok {
+			return fmt.Errorf("match was not a file or a firmware volume: got %T, unable to insert", m)
+		}
 	}
-	// Match is a file, apply visitor.
+	v.Matches = find.Matches
+	// Matches are files, apply visitor.
 	return f.Apply(v)
 }
 
@@ -220,23 +222,25 @@ func (v *Insert) Visit(f uefi.Firmware) error {
 	switch f := f.(type) {
 	case *uefi.FirmwareVolume:
 		for i := 0; i < len(f.Files); i++ {
-			if f.Files[i] == v.FileMatch {
-				// TODO: use InsertWherePreposition to define the location, instead of InsertType
-				switch v.InsertType {
-				case InsertTypeFront:
-					f.Files = append([]*uefi.File{v.NewFile}, f.Files...)
-				case InsertTypeDXE:
-					fallthrough
-				case InsertTypeEnd:
-					f.Files = append(f.Files, v.NewFile)
-				case InsertTypeAfter:
-					f.Files = append(f.Files[:i+1], append([]*uefi.File{v.NewFile}, f.Files[i+1:]...)...)
-				case InsertTypeBefore:
-					f.Files = append(f.Files[:i], append([]*uefi.File{v.NewFile}, f.Files[i:]...)...)
-				case InsertTypeReplaceFFS:
-					f.Files = append(f.Files[:i], append([]*uefi.File{v.NewFile}, f.Files[i+1:]...)...)
+			for _, m := range v.Matches {
+				if f.Files[i] == m {
+					// TODO: use InsertWherePreposition to define the location, instead of InsertType
+					switch v.InsertType {
+					case InsertTypeFront:
+						f.Files = append([]*uefi.File{v.NewFile}, f.Files...)
+					case InsertTypeDXE:
+						fallthrough
+					case InsertTypeEnd:
+						f.Files = append(f.Files, v.NewFile)
+					case InsertTypeAfter:
+						f.Files = append(f.Files[:i+1], append([]*uefi.File{v.NewFile}, f.Files[i+1:]...)...)
+					case InsertTypeBefore:
+						f.Files = append(f.Files[:i], append([]*uefi.File{v.NewFile}, f.Files[i:]...)...)
+					case InsertTypeReplaceFFS:
+						f.Files = append(f.Files[:i], append([]*uefi.File{v.NewFile}, f.Files[i+1:]...)...)
+					}
+					return nil
 				}
-				return nil
 			}
 		}
 	}
