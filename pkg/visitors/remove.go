@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"github.com/linuxboot/fiano/pkg/uefi"
 )
@@ -119,6 +120,22 @@ func (v *Remove) Visit(f uefi.Firmware) error {
 func init() {
 	RegisterCLI("remove", "remove a file from the volume", 1, func(args []string) (uefi.Visitor, error) {
 		pred, err := FindFilePredicate(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return &Remove{
+			Predicate: pred,
+			Pad:       false,
+			W:         os.Stdout,
+		}, nil
+	})
+	RegisterCLI("remove_by_size", "remove a file with specific size from the volume", 2, func(args []string) (uefi.Visitor, error) {
+		size, err := strconv.ParseUint(args[1], 0, 64)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse file size '%s': %w", args[1], err)
+		}
+
+		pred, err := FindFilePredicateSize(args[0], size)
 		if err != nil {
 			return nil, err
 		}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"regexp"
 
 	"github.com/linuxboot/fiano/pkg/guid"
@@ -131,6 +132,26 @@ func FindFilePredicate(r string) (func(f uefi.Firmware) bool, error) {
 	}, nil
 }
 
+// FindFilePredicate is a generic predicate for searching files and UI sections only.
+func FindFilePredicateSize(r string, size uint64) (func(f uefi.Firmware) bool, error) {
+	ciRE, err := regexp.Compile("^(?i)" + r + "$")
+	if err != nil {
+		return nil, err
+	}
+
+	return func(f uefi.Firmware) bool {
+		switch f := f.(type) {
+		case *uefi.FirmwareVolume:
+			return ciRE.MatchString(f.FVName.String()) && f.Length == size
+		case *uefi.File:
+			return ciRE.MatchString(f.Header.GUID.String()) && uefi.Read3Size(f.Header.Size) == size
+		case *uefi.Section:
+			return ciRE.MatchString(f.Name) && uefi.Read3Size(f.Header.Size) == size
+		}
+		return false
+	}, nil
+}
+
 // FindFileFVPredicate is a generic predicate for searching FVs, files and UI sections.
 func FindFileFVPredicate(r string) (func(f uefi.Firmware) bool, error) {
 	ciRE, err := regexp.Compile("^(?i)" + r + "$")
@@ -241,6 +262,21 @@ func FindNVarPredicate(r string) (func(f uefi.Firmware) bool, error) {
 func init() {
 	RegisterCLI("find", "find a file by GUID or Name", 1, func(args []string) (uefi.Visitor, error) {
 		pred, err := FindFilePredicate(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return &Find{
+			Predicate: pred,
+			W:         os.Stdout,
+		}, nil
+	})
+	RegisterCLI("find_size", "find a file by GUID or Name and size", 2, func(args []string) (uefi.Visitor, error) {
+		size, err := strconv.ParseUint(args[1], 0, 64)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse file size '%s': %w", args[1], err)
+		}
+
+		pred, err := FindFilePredicateSize(args[0], size)
 		if err != nil {
 			return nil, err
 		}

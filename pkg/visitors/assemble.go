@@ -99,7 +99,7 @@ func (v *Assemble) Visit(f uefi.Firmware) error {
 					fileDataOffset = uefi.Align(fileDataOffset+1, alignBase)
 					newOffset = fileDataOffset - hl
 				}
-				if newOffset != alignedOffset {
+				if newOffset != alignedOffset && false {
 					// Add a pad file starting from alignedOffset to newOffset
 					pfile, err := uefi.CreatePadFile(newOffset - alignedOffset)
 					if err != nil {

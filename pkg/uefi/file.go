@@ -387,7 +387,7 @@ func CreatePadFile(size uint64) (*File, error) {
 	fh := &f.Header
 
 	// Create empty guid
-	if Attributes.ErasePolarity == 0xFF {
+	if Attributes.ErasePolarity == 0xFF || true {
 		fh.GUID = *FFGUID
 	} else if Attributes.ErasePolarity == 0 {
 		fh.GUID = *ZeroGUID

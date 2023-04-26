@@ -212,7 +212,7 @@ func (v *Insert) Run(f uefi.Firmware) error {
 			return fmt.Errorf("match was not a file or a firmware volume: got %T, unable to insert", m)
 		}
 	}
-	v.Matches = find.Matches
+	v.Matches = find.Matches[:1]
 	// Matches are files, apply visitor.
 	return f.Apply(v)
 }
@@ -272,16 +272,26 @@ func genInsertRegularFileCLI(iType InsertType) func(args []string) (uefi.Visitor
 			pred = FindFileTypePredicate(uefi.FVFileTypeDXECore)
 			filename = args[0]
 		} else {
-			pred, err = FindFileFVPredicate(args[0])
+			if args[1] == "" {
+				pred, err = FindFileFVPredicate(args[0])
+			} else {
+				var size uint64
+				size, err = strconv.ParseUint(args[1], 0, 64)
+				if err != nil {
+					return nil, fmt.Errorf("unable to parse file size '%s': %w", args[1], err)
+				}
+				pred, err = FindFilePredicateSize(args[0], size)
+			}
 			if err != nil {
 				return nil, err
 			}
-			filename = args[1]
+
+			filename = args[2]
 		}
 
 		file, err := parseFile(filename)
 		if err != nil {
-			return nil, fmt.Errorf("unable to parse file '%s': %w", args[1], err)
+			return nil, fmt.Errorf("unable to parse file '%s': %w", filename, err)
 		}
 
 		// Insert File.
@@ -326,7 +336,18 @@ func genInsertFileCLI() func(args []string) (uefi.Visitor, error) {
 			return nil, fmt.Errorf("unknown where-preposition: '%s'", args[2])
 		}
 
-		pred, err := FindFileFVPredicate(args[3])
+		var pred FindPredicate
+		var err error
+		if args[4] == "" {
+			pred, err = FindFileFVPredicate(args[3])
+		} else {
+			var size uint64
+			size, err = strconv.ParseUint(args[4], 0, 64)
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse file size '%s': %w", args[4], err)
+			}
+			pred, err = FindFilePredicateSize(args[3], size)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("unable to parse the predicate parameters '%s': %w", args[0], err)
 		}
@@ -358,9 +379,9 @@ func genInsertFileCLI() func(args []string) (uefi.Visitor, error) {
 
 func init() {
 	RegisterCLI(insertTypeNames[InsertTypeInsert],
-		"insert a file", 4, genInsertFileCLI())
+		"insert a file", 5, genInsertFileCLI())
 	RegisterCLI(insertTypeNames[InsertTypeReplaceFFS],
-		"replace a file with another file", 2, genInsertRegularFileCLI(InsertTypeReplaceFFS))
+		"replace a file with another file", 3, genInsertRegularFileCLI(InsertTypeReplaceFFS))
 	RegisterCLI(insertTypeNames[InsertTypeFront],
 		"(deprecated) insert a file at the beginning of a firmware volume", 2, genInsertRegularFileCLI(InsertTypeFront))
 	RegisterCLI(insertTypeNames[InsertTypeEnd],
