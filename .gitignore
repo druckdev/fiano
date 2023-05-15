@@ -8,3 +8,14 @@ cmds/futk/futk
 cmds/fspinfo/fspinfo
 .vimrc
 *.swp
+
+# binaries
+/cbfs
+/create-ffs
+/fittool
+/fmap
+/fspinfo
+/glzma
+/guid2english
+/microcode
+/utk
